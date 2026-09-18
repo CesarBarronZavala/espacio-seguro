@@ -16,6 +16,62 @@
   
   <!-- Supabase JS Client v2 (CDN) -->
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <!-- Script inline para apertura inmediata garantizada del modal -->
+  <script>
+    function openStoryModal(prefillCategory) {
+      var modal = document.getElementById('storyModal');
+      if (modal) {
+        modal.classList.add('open');
+        modal.style.display = 'flex';
+        modal.style.zIndex = '999999';
+        document.body.style.overflow = 'hidden';
+        var dateInput = document.getElementById('inputFecha');
+        if (dateInput && !dateInput.value) {
+          dateInput.value = new Date().toISOString().split('T')[0];
+        }
+        if (prefillCategory) {
+          var select = document.getElementById('selectTipoAcoso');
+          if (select) select.value = prefillCategory;
+        }
+      }
+    }
+
+    function closeStoryModal() {
+      var modal = document.getElementById('storyModal');
+      if (modal) {
+        modal.classList.remove('open');
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+      }
+    }
+
+    function openConfigModal() {
+      var modal = document.getElementById('configModal');
+      if (modal) {
+        if (window.SUPABASE_CONFIG) {
+          var urlInput = document.getElementById('inputSupabaseUrl');
+          var keyInput = document.getElementById('inputSupabaseAnonKey');
+          if (urlInput) urlInput.value = window.SUPABASE_CONFIG.url || '';
+          if (keyInput) keyInput.value = window.SUPABASE_CONFIG.anonKey || '';
+        }
+        modal.classList.add('open');
+        modal.style.display = 'flex';
+        modal.style.zIndex = '999999';
+        document.body.style.overflow = 'hidden';
+      }
+    }
+
+    function closeConfigModal() {
+      var modal = document.getElementById('configModal');
+      if (modal) {
+        modal.classList.remove('open');
+        modal.style.display = 'none';
+        document.body.style.overflow = '';
+      }
+    }
+  </script>
+
 </head>
 <body>
 
