@@ -454,6 +454,7 @@ function openStoryModal(prefillCategory) {
   const modal = document.getElementById('storyModal');
   if (modal) {
     modal.classList.add('open');
+    modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
     const dateInput = document.getElementById('inputFecha');
     if (dateInput && !dateInput.value) {
@@ -471,6 +472,7 @@ function closeStoryModal() {
   const modal = document.getElementById('storyModal');
   if (modal) {
     modal.classList.remove('open');
+    modal.style.display = 'none';
     document.body.style.overflow = '';
   }
 }
@@ -486,6 +488,7 @@ function openConfigModal() {
       if (keyInput) keyInput.value = config.anonKey || '';
     }
     modal.classList.add('open');
+    modal.style.display = 'flex';
     document.body.style.overflow = 'hidden';
   }
 }
@@ -494,6 +497,7 @@ function closeConfigModal() {
   const modal = document.getElementById('configModal');
   if (modal) {
     modal.classList.remove('open');
+    modal.style.display = 'none';
     document.body.style.overflow = '';
   }
 }
@@ -680,3 +684,14 @@ document.addEventListener('DOMContentLoaded', () => {
     }
   });
 });
+
+// Exposición explícita de funciones en el ámbito global window
+window.openStoryModal = openStoryModal;
+window.closeStoryModal = closeStoryModal;
+window.openConfigModal = openConfigModal;
+window.closeConfigModal = closeConfigModal;
+window.filterFeedFromCard = filterFeedFromCard;
+window.toggleEmpathy = toggleEmpathy;
+window.toggleMobileMenu = toggleMobileMenu;
+window.closeMobileMenu = closeMobileMenu;
+window.toggleFaq = toggleFaq;

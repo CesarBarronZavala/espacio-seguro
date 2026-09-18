@@ -1452,7 +1452,8 @@ section[id], footer[id] {
 }
 
 .modal-backdrop.open {
-  display: flex;
+  display: flex !important;
+  z-index: 999999 !important;
 }
 
 .modal-card {

@@ -58,10 +58,10 @@
       
       <!-- Acciones de cabecera -->
       <div class="header-actions">
-        <button id="btnOpenStoryModalHeader" class="btn btn-primary btn-sm">
+        <button id="btnOpenStoryModalHeader" class="btn btn-primary btn-sm" onclick="openStoryModal()">
           ✍️ <span>Contar historia</span>
         </button>
-        <button id="btnOpenConfigModal" class="icon-btn" title="Configurar conexión con Supabase" aria-label="Configurar base de datos">
+        <button id="btnOpenConfigModal" class="icon-btn" onclick="openConfigModal()" title="Configurar conexión con Supabase" aria-label="Configurar base de datos">
           ⚙️
         </button>
         <a href="admin.html" class="icon-btn" title="Panel de moderación" aria-label="Panel de moderación">
@@ -134,7 +134,7 @@
             </div>
 
             <div class="hero-actions">
-              <button id="btnOpenStoryModalHero" class="btn btn-primary btn-lg">
+              <button id="btnOpenStoryModalHero" class="btn btn-primary btn-lg" onclick="openStoryModal()">
                 ✍️ Compartir mi experiencia
               </button>
               <a href="#feed-section" class="btn btn-secondary btn-lg">
@@ -381,7 +381,7 @@
             <span id="dbStatusIcon">🟢</span>
             <span id="dbStatusText">Conectado a <strong>Supabase (PostgreSQL)</strong>.</span>
           </div>
-          <button id="btnDbConfigurePrompt" class="btn btn-sm btn-outline" style="background:#FFF;">⚙️ Configurar</button>
+          <button id="btnDbConfigurePrompt" class="btn btn-sm btn-outline" onclick="openConfigModal()" style="background:#FFF;">⚙️ Configurar</button>
         </div>
 
         <!-- Banner de invitación a compartir anécdota -->
@@ -390,7 +390,7 @@
             <strong>¿Has superado o vivido una situación similar?</strong>
             <span>Tu testimonio anónimo puede brindar esperanza, orientación y fuerza a quienes hoy lo necesitan.</span>
           </div>
-          <button id="btnOpenStoryModalBanner" class="btn btn-primary btn-sm">
+          <button id="btnOpenStoryModalBanner" class="btn btn-primary btn-sm" onclick="openStoryModal()">
             ✍️ Compartir mi experiencia
           </button>
         </div>
@@ -689,7 +689,7 @@
     <div class="modal-card">
       <div class="modal-header">
         <h2 id="formStoryTitle" class="modal-title">✍️ Compartir mi experiencia</h2>
-        <button id="btnCloseStoryModal" class="modal-close-btn" aria-label="Cerrar modal">✕</button>
+        <button id="btnCloseStoryModal" class="modal-close-btn" aria-label="Cerrar modal" onclick="closeStoryModal()">✕</button>
       </div>
 
       <form id="storyForm">
@@ -787,7 +787,7 @@
         </div>
 
         <div class="modal-footer">
-          <button type="button" id="btnCancelStoryModal" class="btn btn-secondary">Cancelar</button>
+          <button type="button" id="btnCancelStoryModal" class="btn btn-secondary" onclick="closeStoryModal()">Cancelar</button>
           <button type="submit" id="btnSubmitStory" class="btn btn-primary">
             <span>Enviar para revisión</span>
           </button>
@@ -803,7 +803,7 @@
     <div class="modal-card" style="max-width: 540px;">
       <div class="modal-header">
         <h2 id="configModalTitle" class="modal-title">⚙️ Conexión con Supabase</h2>
-        <button id="btnCloseConfigModal" class="modal-close-btn" aria-label="Cerrar modal">✕</button>
+        <button id="btnCloseConfigModal" class="modal-close-btn" onclick="closeConfigModal()" aria-label="Cerrar modal">✕</button>
       </div>
       <div class="modal-body">
         <p style="font-size: 0.9rem; color: var(--color-text-muted); margin-bottom: 1.25rem;">
