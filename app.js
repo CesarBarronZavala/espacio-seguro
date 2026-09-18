@@ -98,19 +98,32 @@ function initDatabase() {
   const statusIcon = document.getElementById('dbStatusIcon');
   const statusText = document.getElementById('dbStatusText');
 
+  // Detectar si se está abriendo desde file:// (causa problemas de CORS con Supabase)
+  const isFileProtocol = window.location.protocol === 'file:';
+
   if (config && config.isConfigured() && window.supabase) {
     try {
       supabaseClient = window.supabase.createClient(config.url, config.anonKey);
       isUsingSupabase = true;
-      
+
       if (statusBanner) {
         statusBanner.style.display = 'flex';
-        statusBanner.className = 'db-status-banner connected';
-        statusIcon.textContent = '🟢';
-        statusText.innerHTML = 'Conectado a <strong>Supabase (PostgreSQL)</strong>.';
+
+        if (isFileProtocol) {
+          // Advertir que file:// puede bloquear peticiones de red
+          statusBanner.className = 'db-status-banner warning';
+          statusIcon.textContent = '⚠️';
+          statusText.innerHTML =
+            '<strong>Supabase configurado</strong>, pero abriste el archivo directo desde tu PC (<code>file://</code>). ' +
+            'Para que funcione correctamente, <strong>usa el servidor local</strong>: ejecuta <code>iniciar-servidor.bat</code> y abre <code>http://localhost:8080</code> en tu navegador.';
+        } else {
+          statusBanner.className = 'db-status-banner connected';
+          statusIcon.textContent = '🟢';
+          statusText.innerHTML = 'Conectado a <strong>Supabase (PostgreSQL)</strong>.';
+        }
       }
     } catch (err) {
-      console.warn('Error inicializando Supabase:', err);
+      console.error('Error inicializando Supabase:', err);
       isUsingSupabase = false;
     }
   } else {
@@ -119,18 +132,18 @@ function initDatabase() {
       statusBanner.style.display = 'flex';
       statusBanner.className = 'db-status-banner';
       statusIcon.textContent = '💡';
-      statusText.innerHTML = 'Operando en <strong>Modo Local</strong>.';
+      statusText.innerHTML =
+        'Operando en <strong>Modo Local</strong> (sin Supabase). Los testimonios se guardarán solo en este dispositivo.' +
+        ' <button onclick="openConfigModal()" style="background:none;border:none;color:var(--color-primary-dark);font-weight:600;cursor:pointer;text-decoration:underline;padding:0;">Configurar Supabase</button>';
     }
   }
 }
 
 // =========================================================================
-// 4. CARGA DE EXPERIENCIAS (Carga instantánea + Sync en segundo plano)
+// 4. CARGA DE EXPERIENCIAS
 // =========================================================================
 async function fetchPublishedStories() {
-  // Renderizado instantáneo con datos locales
   renderFeed();
-
   if (!isUsingSupabase || !supabaseClient) return;
 
   try {
@@ -140,19 +153,20 @@ async function fetchPublishedStories() {
       .eq('estado', 'publicado')
       .order('created_at', { ascending: false });
 
-    // Timeout de seguridad de 3.5 segundos para no bloquear la interfaz
-    const timeoutPromise = new Promise((_, reject) => 
-      setTimeout(() => reject(new Error('Timeout Supabase')), 3500)
+    const timeoutPromise = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('Timeout Supabase')), 5000)
     );
 
     const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
 
-    if (!error && Array.isArray(data) && data.length > 0) {
+    if (error) {
+      console.warn('Error al cargar testimonios de Supabase:', error.message, error);
+    } else if (Array.isArray(data) && data.length > 0) {
       allPublishedStories = data;
       renderFeed();
     }
   } catch (err) {
-    console.log('Sincronización Supabase completada con datos locales de respaldo.');
+    console.log('Usando datos locales de respaldo. Error Supabase:', err.message);
   }
 }
 
@@ -161,13 +175,7 @@ async function fetchPublishedStories() {
 // =========================================================================
 function escapeHtml(text) {
   if (!text) return '';
-  const map = {
-    '&': '&amp;',
-    '<': '&lt;',
-    '>': '&gt;',
-    '"': '&quot;',
-    "'": '&#039;'
-  };
+  const map = { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#039;' };
   return String(text).replace(/[&<>"']/g, m => map[m]);
 }
 
@@ -190,11 +198,10 @@ function renderFeed() {
 
   const filtered = allPublishedStories.filter(story => {
     const matchesFilter = (activeFilter === 'todos') || (story.tipo_acoso === activeFilter);
-    const matchesSearch = !searchQuery || 
+    const matchesSearch = !searchQuery ||
       story.titulo.toLowerCase().includes(searchQuery.toLowerCase()) ||
       story.relato.toLowerCase().includes(searchQuery.toLowerCase()) ||
       (story.alias && story.alias.toLowerCase().includes(searchQuery.toLowerCase()));
-    
     return matchesFilter && matchesSearch;
   });
 
@@ -217,18 +224,17 @@ function renderFeed() {
   }
 
   const categoryLabels = {
-    escolar: { label: 'Acoso Escolar', badgeClass: 'badge-escolar', icon: '🎒' },
-    laboral: { label: 'Acoso Laboral', badgeClass: 'badge-laboral', icon: '💼' },
-    cibernetico: { label: 'Ciberacoso', badgeClass: 'badge-cibernetico', icon: '💻' },
-    otro: { label: 'Otro tipo de acoso', badgeClass: 'badge-otro', icon: '🕊️' }
+    escolar:    { label: 'Acoso Escolar',    badgeClass: 'badge-escolar',    icon: '🎒' },
+    laboral:    { label: 'Acoso Laboral',    badgeClass: 'badge-laboral',    icon: '💼' },
+    cibernetico:{ label: 'Ciberacoso',       badgeClass: 'badge-cibernetico',icon: '💻' },
+    otro:       { label: 'Otro tipo de acoso',badgeClass: 'badge-otro',      icon: '🕊️' }
   };
 
   feedGrid.innerHTML = filtered.map(story => {
     const cat = categoryLabels[story.tipo_acoso] || categoryLabels.otro;
-    const authorText = story.anonimo || !story.alias 
-      ? '<span class="author-anon">🔒 Testimonio Anónimo</span>' 
+    const authorText = story.anonimo || !story.alias
+      ? '<span class="author-anon">🔒 Testimonio Anónimo</span>'
       : `<span class="author-alias">👤 ${escapeHtml(story.alias)}</span>`;
-
     const formattedDate = formatDate(story.fecha || story.created_at);
     const supports = story.apoyos_count || 0;
     const isSupported = safeStorage.getItem(`espacio_apoyo_${story.id}`) === 'true';
@@ -237,27 +243,17 @@ function renderFeed() {
       <article class="story-card" data-id="${story.id}">
         <div class="story-card-header">
           <div class="story-meta-top">
-            <span class="badge-type ${cat.badgeClass}">
-              ${cat.icon} ${escapeHtml(cat.label)}
-            </span>
-            <span class="story-date" title="Fecha del testimonio">
-              📅 ${formattedDate}
-            </span>
+            <span class="badge-type ${cat.badgeClass}">${cat.icon} ${escapeHtml(cat.label)}</span>
+            <span class="story-date" title="Fecha del testimonio">📅 ${formattedDate}</span>
           </div>
-
           <h3 class="story-title">${escapeHtml(story.titulo)}</h3>
-          
-          <div class="story-author">
-            ${authorText}
-          </div>
+          <div class="story-author">${authorText}</div>
         </div>
-
         <div class="story-body">${escapeHtml(story.relato)}</div>
-
         <div class="story-footer">
-          <button 
-            type="button" 
-            class="btn-empathy ${isSupported ? 'active' : ''}" 
+          <button
+            type="button"
+            class="btn-empathy ${isSupported ? 'active' : ''}"
             onclick="toggleEmpathy(${story.id})"
             title="Mostrar solidaridad y apoyo"
             aria-label="Dar apoyo a este testimonio"
@@ -266,7 +262,6 @@ function renderFeed() {
             <span>Te escuchamos</span>
             <strong style="margin-left: 0.2rem;">${supports}</strong>
           </button>
-
           <span style="font-size: 0.75rem; color: var(--color-text-light);">Espacio seguro</span>
         </div>
       </article>
@@ -275,12 +270,10 @@ function renderFeed() {
 }
 
 // =========================================================================
-// 6. FILTRADO DESDE TARJETAS EDUCATIVAS Y BOTONES DE SECCIÓN
+// 6. FILTRADO
 // =========================================================================
 function filterFeedFromCard(category) {
   activeFilter = category;
-  
-  // Actualizar píldoras de filtro en UI
   const pills = document.querySelectorAll('.filter-pill');
   pills.forEach(p => {
     if (p.getAttribute('data-filter') === category) {
@@ -291,32 +284,26 @@ function filterFeedFromCard(category) {
       p.setAttribute('aria-selected', 'false');
     }
   });
-
-  // Renderizar testimonios filtrados
   renderFeed();
-
-  // Scroll suave hacia la sección del Feed
   const feedSection = document.getElementById('feed-section');
-  if (feedSection) {
-    feedSection.scrollIntoView({ behavior: 'smooth' });
-  }
+  if (feedSection) feedSection.scrollIntoView({ behavior: 'smooth' });
 }
 
 // =========================================================================
-// 7. ENVÍO DE ANÉCDOTA / EXPERIENCIA
+// 7. ENVÍO DE TESTIMONIO — Con manejo de errores real
 // =========================================================================
 async function handleStorySubmit(e) {
   e.preventDefault();
-  
+
   const submitBtn = document.getElementById('btnSubmitStory');
   const originalBtnText = submitBtn.innerHTML;
 
-  const titulo = document.getElementById('inputTitulo').value.trim();
+  const titulo    = document.getElementById('inputTitulo').value.trim();
   const tipoAcoso = document.getElementById('selectTipoAcoso').value;
-  const fecha = document.getElementById('inputFecha').value;
-  const relato = document.getElementById('textareaRelato').value.trim();
-  const anonimo = document.getElementById('checkAnonimo').checked;
-  const alias = anonimo ? null : (document.getElementById('inputAlias').value.trim() || 'Participante');
+  const fecha     = document.getElementById('inputFecha').value;
+  const relato    = document.getElementById('textareaRelato').value.trim();
+  const anonimo   = document.getElementById('checkAnonimo').checked;
+  const alias     = anonimo ? null : (document.getElementById('inputAlias').value.trim() || 'Participante');
 
   if (!titulo || !tipoAcoso || !fecha || !relato) {
     showToast('Por favor completa todos los campos requeridos (*).', 'error');
@@ -332,61 +319,101 @@ async function handleStorySubmit(e) {
   submitBtn.innerHTML = '<span>Enviando con cuidado...</span>';
 
   const newStoryPayload = {
-    titulo: titulo,
-    tipo_acoso: tipoAcoso,
-    relato: relato,
-    fecha: fecha,
-    anonimo: anonimo,
-    alias: alias,
-    estado: 'pendiente',
-    apoyos_count: 0,
-    created_at: new Date().toISOString()
+    titulo:       titulo,
+    tipo_acoso:   tipoAcoso,
+    relato:       relato,
+    fecha:        fecha,
+    anonimo:      anonimo,
+    alias:        alias,
+    estado:       'pendiente',
+    apoyos_count: 0
+    // created_at se genera automáticamente en Supabase con DEFAULT
   };
 
-  try {
-    // 1. Guardar en Supabase si está disponible
-    if (isUsingSupabase && supabaseClient) {
-      try {
-        const { error } = await supabaseClient.from('experiencias').insert([newStoryPayload]);
-        if (error) console.warn('Supabase insert notice:', error);
-      } catch (e) {
-        console.warn('Error al insertar en Supabase:', e);
-      }
-    }
+  let supabaseOk = false;
+  let supabaseErrorMsg = null;
 
-    // 2. Guardar en almacenamiento local para respaldo y persistencia
+  // 1. Intentar guardar en Supabase
+  if (isUsingSupabase && supabaseClient) {
+    try {
+      const { data, error } = await supabaseClient
+        .from('experiencias')
+        .insert([newStoryPayload])
+        .select(); // .select() para confirmar que se guardó
+
+      if (error) {
+        supabaseErrorMsg = error.message || JSON.stringify(error);
+        console.error('Error Supabase al insertar:', error);
+      } else {
+        supabaseOk = true;
+        console.log('Testimonio guardado en Supabase:', data);
+      }
+    } catch (err) {
+      supabaseErrorMsg = err.message || String(err);
+      console.error('Excepción al insertar en Supabase:', err);
+    }
+  }
+
+  // 2. Siempre guardar localmente como respaldo
+  try {
     const local = getLocalStories();
-    const newLocalStory = { ...newStoryPayload, id: Date.now() };
+    const newLocalStory = {
+      ...newStoryPayload,
+      id: Date.now(),
+      created_at: new Date().toISOString()
+    };
     local.unshift(newLocalStory);
     saveLocalStories(local);
-
-    // 3. Resetear formulario y cerrar modal
-    document.getElementById('storyForm').reset();
-    document.getElementById('checkAnonimo').checked = true;
-    document.getElementById('aliasWrapper').classList.remove('visible');
-    const charCounter = document.getElementById('charCounter');
-    if (charCounter) charCounter.textContent = '0 / 5000';
-    
-    closeStoryModal();
-
-    // 4. Notificar al usuario con mensaje de agradecimiento
-    showToast(
-      '¡Gracias por tu valentía! Tu experiencia ha sido recibida con respeto. ' +
-      'Pasará por una breve revisión para proteger la privacidad de todos antes de publicarse en el feed.',
-      'success',
-      8000
-    );
-
-  } catch (err) {
-    showToast('Ocurrió un inconveniente al registrar tu testimonio.', 'error');
-  } finally {
-    submitBtn.disabled = false;
-    submitBtn.innerHTML = originalBtnText;
+  } catch (localErr) {
+    console.warn('Error al guardar localmente:', localErr);
   }
+
+  // 3. Resetear formulario
+  document.getElementById('storyForm').reset();
+  document.getElementById('checkAnonimo').checked = true;
+  document.getElementById('aliasWrapper').classList.remove('visible');
+  const charCounter = document.getElementById('charCounter');
+  if (charCounter) charCounter.textContent = '0 / 5000';
+  closeStoryModal();
+
+  // 4. Mostrar mensaje adecuado según resultado
+  if (isUsingSupabase && !supabaseOk) {
+    // Supabase configurado pero falló
+    const isFileProtocol = window.location.protocol === 'file:';
+    if (isFileProtocol) {
+      showToast(
+        '⚠️ Tu historia se guardó localmente, pero no pudo enviarse a la base de datos porque estás abriendo el archivo directamente. ' +
+        'Usa el servidor local (iniciar-servidor.bat) para que funcione.',
+        'error', 9000
+      );
+    } else {
+      showToast(
+        '⚠️ No se pudo guardar en Supabase: ' + (supabaseErrorMsg || 'error desconocido') +
+        '. Verifica que ejecutaste el schema.sql en Supabase y que las políticas RLS están activas.',
+        'error', 10000
+      );
+    }
+  } else if (supabaseOk) {
+    showToast(
+      '¡Gracias por tu valentía! Tu experiencia ha sido recibida con respeto y enviada a la base de datos. ' +
+      'Pasará por una breve revisión antes de publicarse.',
+      'success', 8000
+    );
+  } else {
+    // Modo local
+    showToast(
+      '¡Gracias por compartir! Tu experiencia se guardó en este dispositivo. ' +
+      'Configura Supabase (⚙️) para que quede en la base de datos compartida.',
+      'info', 7000
+    );
+  }
+
+  submitBtn.disabled = false;
+  submitBtn.innerHTML = originalBtnText;
 }
 
 // =========================================================================
-// 8. REACCIONES DE APOYO Y EMPATÍA
+// 8. REACCIONES DE APOYO
 // =========================================================================
 async function toggleEmpathy(storyId) {
   const isAlreadySupported = safeStorage.getItem(`espacio_apoyo_${storyId}`) === 'true';
@@ -397,12 +424,10 @@ async function toggleEmpathy(storyId) {
   const newCount = isAlreadySupported ? Math.max(0, currentCount - 1) : currentCount + 1;
   const newStatus = !isAlreadySupported;
 
-  // Actualización optimista en memoria y UI
   targetStory.apoyos_count = newCount;
   safeStorage.setItem(`espacio_apoyo_${storyId}`, newStatus ? 'true' : 'false');
   renderFeed();
 
-  // Actualizar en almacenamiento local
   const local = getLocalStories();
   const foundIndex = local.findIndex(s => s.id == storyId);
   if (foundIndex !== -1) {
@@ -410,7 +435,6 @@ async function toggleEmpathy(storyId) {
     saveLocalStories(local);
   }
 
-  // Actualizar en Supabase si está disponible
   if (isUsingSupabase && supabaseClient) {
     try {
       await supabaseClient
@@ -424,22 +448,18 @@ async function toggleEmpathy(storyId) {
 }
 
 // =========================================================================
-// 9. MODALES Y CONTROLADORES DE INTERFAZ
+// 9. MODALES
 // =========================================================================
 function openStoryModal(prefillCategory) {
   const modal = document.getElementById('storyModal');
   if (modal) {
     modal.classList.add('open');
     document.body.style.overflow = 'hidden';
-    
-    // Asignar fecha de hoy por defecto si el campo está vacío
     const dateInput = document.getElementById('inputFecha');
     if (dateInput && !dateInput.value) {
       const today = new Date().toISOString().split('T')[0];
       dateInput.value = today;
     }
-
-    // Preseleccionar categoría si fue provista
     if (prefillCategory) {
       const select = document.getElementById('selectTipoAcoso');
       if (select) select.value = prefillCategory;
@@ -478,31 +498,23 @@ function closeConfigModal() {
   }
 }
 
-// Menú móvil
 function toggleMobileMenu() {
   const drawer = document.getElementById('mobileNavDrawer');
-  if (drawer) {
-    drawer.classList.toggle('open');
-  }
+  if (drawer) drawer.classList.toggle('open');
 }
 
 function closeMobileMenu() {
   const drawer = document.getElementById('mobileNavDrawer');
-  if (drawer) {
-    drawer.classList.remove('open');
-  }
+  if (drawer) drawer.classList.remove('open');
 }
 
-// Acordeón FAQ
 function toggleFaq(buttonElement) {
   const faqItem = buttonElement.closest('.faq-item');
-  if (faqItem) {
-    faqItem.classList.toggle('active');
-  }
+  if (faqItem) faqItem.classList.toggle('active');
 }
 
 // =========================================================================
-// 10. NOTIFICACIONES TOAST
+// 10. TOASTS
 // =========================================================================
 function showToast(message, type = 'info', duration = 5000) {
   const container = document.getElementById('toastContainer');
@@ -510,20 +522,20 @@ function showToast(message, type = 'info', duration = 5000) {
 
   const toast = document.createElement('div');
   toast.className = `toast ${type}`;
-  
-  const iconMap = {
-    success: '✅',
-    error: '⚠️',
-    info: 'ℹ️'
-  };
+  const iconMap = { success: '✅', error: '⚠️', info: 'ℹ️' };
+
+  // Para mensajes de error largos con info técnica, no escapar HTML
+  const safeMsg = type === 'error'
+    ? message.replace(/</g, '&lt;').replace(/>/g, '&gt;')
+    : escapeHtml(message);
 
   toast.innerHTML = `
     <span>${iconMap[type] || 'ℹ️'}</span>
-    <span style="flex-grow: 1;">${escapeHtml(message)}</span>
+    <span style="flex-grow: 1;">${safeMsg}</span>
+    <button onclick="this.parentElement.remove()" style="background:none;border:none;cursor:pointer;font-size:1rem;padding:0 0 0 0.5rem;opacity:0.6;" aria-label="Cerrar">✕</button>
   `;
 
   container.appendChild(toast);
-
   setTimeout(() => {
     toast.style.opacity = '0';
     toast.style.transform = 'translateY(10px)';
@@ -536,38 +548,36 @@ function showToast(message, type = 'info', duration = 5000) {
 // 11. EVENT LISTENERS Y ARRANQUE
 // =========================================================================
 document.addEventListener('DOMContentLoaded', () => {
-  // Inicialización de base de datos y renderizado inmediato
   initDatabase();
   fetchPublishedStories();
 
   // Modal de testimonio
   const btnStoryHeader = document.getElementById('btnOpenStoryModalHeader');
-  const btnStoryHero = document.getElementById('btnOpenStoryModalHero');
+  const btnStoryHero   = document.getElementById('btnOpenStoryModalHero');
   const btnStoryBanner = document.getElementById('btnOpenStoryModalBanner');
-  const btnStoryClose = document.getElementById('btnCloseStoryModal');
+  const btnStoryClose  = document.getElementById('btnCloseStoryModal');
   const btnStoryCancel = document.getElementById('btnCancelStoryModal');
-  const storyForm = document.getElementById('storyForm');
+  const storyForm      = document.getElementById('storyForm');
 
   if (btnStoryHeader) btnStoryHeader.addEventListener('click', () => openStoryModal());
-  if (btnStoryHero) btnStoryHero.addEventListener('click', () => openStoryModal());
+  if (btnStoryHero)   btnStoryHero.addEventListener('click',   () => openStoryModal());
   if (btnStoryBanner) btnStoryBanner.addEventListener('click', () => openStoryModal());
-  if (btnStoryClose) btnStoryClose.addEventListener('click', closeStoryModal);
+  if (btnStoryClose)  btnStoryClose.addEventListener('click',  closeStoryModal);
   if (btnStoryCancel) btnStoryCancel.addEventListener('click', closeStoryModal);
-  if (storyForm) storyForm.addEventListener('submit', handleStorySubmit);
+  if (storyForm)      storyForm.addEventListener('submit',     handleStorySubmit);
 
-  // Contador de caracteres en tiempo real
+  // Contador de caracteres
   const textareaRelato = document.getElementById('textareaRelato');
-  const charCounter = document.getElementById('charCounter');
+  const charCounter    = document.getElementById('charCounter');
   if (textareaRelato && charCounter) {
     textareaRelato.addEventListener('input', () => {
-      const len = textareaRelato.value.length;
-      charCounter.textContent = `${len} / 5000`;
+      charCounter.textContent = `${textareaRelato.value.length} / 5000`;
     });
   }
 
-  // Toggle de anonimato / alias
-  const checkAnonimo = document.getElementById('checkAnonimo');
-  const aliasWrapper = document.getElementById('aliasWrapper');
+  // Toggle de anonimato
+  const checkAnonimo  = document.getElementById('checkAnonimo');
+  const aliasWrapper  = document.getElementById('aliasWrapper');
   if (checkAnonimo && aliasWrapper) {
     checkAnonimo.addEventListener('change', () => {
       if (checkAnonimo.checked) {
@@ -581,15 +591,15 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Modal de configuración Supabase
-  const btnConfig = document.getElementById('btnOpenConfigModal');
+  const btnConfig       = document.getElementById('btnOpenConfigModal');
   const btnPromptConfig = document.getElementById('btnDbConfigurePrompt');
-  const btnCloseConfig = document.getElementById('btnCloseConfigModal');
-  const btnSaveCreds = document.getElementById('btnSaveCredentials');
-  const btnClearCreds = document.getElementById('btnClearCredentials');
+  const btnCloseConfig  = document.getElementById('btnCloseConfigModal');
+  const btnSaveCreds    = document.getElementById('btnSaveCredentials');
+  const btnClearCreds   = document.getElementById('btnClearCredentials');
 
-  if (btnConfig) btnConfig.addEventListener('click', openConfigModal);
+  if (btnConfig)       btnConfig.addEventListener('click',       openConfigModal);
   if (btnPromptConfig) btnPromptConfig.addEventListener('click', openConfigModal);
-  if (btnCloseConfig) btnCloseConfig.addEventListener('click', closeConfigModal);
+  if (btnCloseConfig)  btnCloseConfig.addEventListener('click',  closeConfigModal);
 
   if (btnSaveCreds) {
     btnSaveCreds.addEventListener('click', () => {
@@ -621,7 +631,7 @@ document.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  // Filtros de categoría del feed
+  // Filtros de categoría
   const filterPills = document.querySelectorAll('.filter-pill');
   filterPills.forEach(pill => {
     pill.addEventListener('click', () => {
@@ -647,11 +657,9 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Menú móvil
   const btnMobileMenu = document.getElementById('btnMobileMenu');
-  if (btnMobileMenu) {
-    btnMobileMenu.addEventListener('click', toggleMobileMenu);
-  }
+  if (btnMobileMenu) btnMobileMenu.addEventListener('click', toggleMobileMenu);
 
-  // Cerrar modales con la tecla Escape o al hacer clic fuera del card
+  // Cerrar con Escape o clic fuera
   window.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
       closeStoryModal();

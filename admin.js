@@ -59,14 +59,15 @@ function initDatabase() {
     try {
       supabaseClient = window.supabase.createClient(config.url, config.anonKey);
       isUsingSupabase = true;
-      if (sourceBadge) sourceBadge.textContent = '🟢 Origen: Supabase PostgreSQL';
+      if (sourceBadge) sourceBadge.innerHTML = '🟢 Origen: <strong>Supabase (PostgreSQL)</strong>';
     } catch (err) {
+      console.warn('Error inicializando Supabase en Admin:', err);
       isUsingSupabase = false;
-      if (sourceBadge) sourceBadge.textContent = '💡 Origen: Modo Local';
+      if (sourceBadge) sourceBadge.innerHTML = '💡 Origen: <strong>Modo Local</strong>';
     }
   } else {
     isUsingSupabase = false;
-    if (sourceBadge) sourceBadge.textContent = '💡 Origen: Modo Local';
+    if (sourceBadge) sourceBadge.innerHTML = '💡 Origen: <strong>Modo Local</strong>';
   }
 }
 
@@ -83,12 +84,17 @@ async function loadAdminData() {
         .select('*')
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      allStories = data || [];
+      if (error) {
+        console.warn('Error consultando Supabase en Admin:', error);
+        allStories = getLocalStories();
+      } else {
+        allStories = data || [];
+      }
     } else {
       allStories = getLocalStories();
     }
   } catch (err) {
+    console.warn('Excepción al cargar datos en Admin:', err);
     allStories = getLocalStories();
   } finally {
     updateStats();
@@ -109,13 +115,13 @@ function updateStats() {
   if (spu) spu.textContent = published;
   if (sr) sr.textContent = rejected;
 
-  const tabPending = document.querySelector('[data-tab="pendiente"]');
-  const tabPub = document.querySelector('[data-tab="publicado"]');
-  const tabRej = document.querySelector('[data-tab="rechazado"]');
+  const tcp = document.getElementById('tabCountPending');
+  const tcpu = document.getElementById('tabCountPublished');
+  const tcr = document.getElementById('tabCountRejected');
 
-  if (tabPending) tabPending.textContent = `⏳ Pendientes (${pending})`;
-  if (tabPub) tabPub.textContent = `✅ Publicados (${published})`;
-  if (tabRej) tabRej.textContent = `🚫 Rechazados (${rejected})`;
+  if (tcp) tcp.textContent = pending;
+  if (tcpu) tcpu.textContent = published;
+  if (tcr) tcr.textContent = rejected;
 }
 
 function escapeHtml(text) {
@@ -140,8 +146,8 @@ function renderMainView() {
     listContainer.innerHTML = `
       <div style="text-align: center; padding: 3rem 1rem; color: var(--color-text-muted);">
         <div style="font-size: 2.5rem; margin-bottom: 0.5rem;">✨</div>
-        <h3>No hay relatos en estado "${currentTab}"</h3>
-        <p style="font-size: 0.88rem;">Todos los registros se encuentran al día.</p>
+        <h3 style="color: var(--color-text-main);">No hay relatos en estado "${currentTab}"</h3>
+        <p style="font-size: 0.88rem;">Todos los registros en esta sección se encuentran al día.</p>
       </div>
     `;
     return;
@@ -164,7 +170,7 @@ function renderMainView() {
       <div class="admin-story-item" data-id="${story.id}">
         <div class="admin-item-header">
           <div>
-            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem;">
+            <div style="display: flex; align-items: center; gap: 0.5rem; margin-bottom: 0.35rem; flex-wrap: wrap;">
               <span class="badge-type ${cat.badgeClass}">${cat.icon} ${escapeHtml(cat.label)}</span>
               <span style="font-size: 0.78rem; color: var(--color-text-muted);">ID: ${story.id}</span>
               <span style="font-size: 0.78rem; color: var(--color-text-muted);">📅 ${escapeHtml(story.fecha || '')}</span>
@@ -210,7 +216,7 @@ function renderMainView() {
 }
 
 async function updateStoryStatus(storyId, newStatus) {
-  // Actualización optimista local
+  // Actualización local
   const target = allStories.find(s => s.id == storyId);
   if (target) target.estado = newStatus;
 
@@ -225,10 +231,12 @@ async function updateStoryStatus(storyId, newStatus) {
   // Actualizar en Supabase si está disponible
   if (isUsingSupabase && supabaseClient) {
     try {
-      await supabaseClient
+      const { error } = await supabaseClient
         .from('experiencias')
         .update({ estado: newStatus })
         .eq('id', storyId);
+
+      if (error) console.warn('Supabase update warning:', error);
     } catch (err) {
       console.warn('Error en Supabase, estado guardado localmente:', err);
     }
@@ -253,10 +261,12 @@ async function deleteStory(storyId) {
   // Eliminar en Supabase
   if (isUsingSupabase && supabaseClient) {
     try {
-      await supabaseClient
+      const { error } = await supabaseClient
         .from('experiencias')
         .delete()
         .eq('id', storyId);
+
+      if (error) console.warn('Supabase delete warning:', error);
     } catch (err) {
       console.warn('Error eliminando de Supabase:', err);
     }
@@ -285,16 +295,16 @@ function showToast(message, type = 'info') {
 // Control de Acceso por PIN
 function checkAdminAuth() {
   const isAuth = safeSession.getItem(ADMIN_PIN_STORAGE_KEY) === 'true';
-  const authModal = document.getElementById('adminAuthModal');
+  const authSection = document.getElementById('authSection');
   const mainContent = document.getElementById('adminMainContent');
 
   if (isAuth) {
-    if (authModal) authModal.classList.remove('open');
+    if (authSection) authSection.style.display = 'none';
     if (mainContent) mainContent.style.display = 'block';
     initDatabase();
     loadAdminData();
   } else {
-    if (authModal) authModal.classList.add('open');
+    if (authSection) authSection.style.display = 'block';
     if (mainContent) mainContent.style.display = 'none';
   }
 }
@@ -303,11 +313,11 @@ document.addEventListener('DOMContentLoaded', () => {
   checkAdminAuth();
 
   // Formulario de autenticación por PIN
-  const pinForm = document.getElementById('adminPinForm');
+  const pinForm = document.getElementById('adminAuthForm');
   if (pinForm) {
     pinForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      const pinInput = document.getElementById('adminPinInput');
+      const pinInput = document.getElementById('adminPin');
       if (pinInput && pinInput.value.trim() === DEFAULT_PIN) {
         safeSession.setItem(ADMIN_PIN_STORAGE_KEY, 'true');
         checkAdminAuth();
@@ -323,7 +333,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Pestañas de estado (Pendientes, Publicados, Rechazados)
-  const tabs = document.querySelectorAll('.admin-tab-btn');
+  const tabs = document.querySelectorAll('.filter-pill[data-tab]');
   tabs.forEach(tab => {
     tab.addEventListener('click', () => {
       tabs.forEach(t => t.classList.remove('active'));
@@ -334,7 +344,7 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Botón cerrar sesión
-  const btnLogout = document.getElementById('btnAdminLogout');
+  const btnLogout = document.getElementById('btnLogoutAdmin');
   if (btnLogout) {
     btnLogout.addEventListener('click', () => {
       safeSession.removeItem(ADMIN_PIN_STORAGE_KEY);
@@ -343,7 +353,7 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Botón recargar
-  const btnRefresh = document.getElementById('btnAdminRefresh');
+  const btnRefresh = document.getElementById('btnRefreshAdmin');
   if (btnRefresh) {
     btnRefresh.addEventListener('click', () => {
       loadAdminData();
